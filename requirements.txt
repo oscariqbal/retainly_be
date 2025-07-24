@@ -1,6 +1,7 @@
-scikit-learn
-flask
-flask-cors
-joblib
-numpy
+fastapi
+uvicorn
 pandas
+numpy
+joblib
+python-multipart
+scikit-learn
