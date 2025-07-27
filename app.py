@@ -12,11 +12,9 @@ import time
 import requests
 import gdown
 
-import sys
-print("Running Python version:", sys.version)
-
 MODEL_PATH = "model.pkl"
-MODEL_ID = "16zgVN2Dw-gkVjpwwL7CZwTDnlBTzriBZ"
+MODEL_ID = "1rk4F4FImzhMIWCx0A-f8KoUNgOFR-2nP"
+
 
 SCALER_PATH = "scaler.pkl"
 
