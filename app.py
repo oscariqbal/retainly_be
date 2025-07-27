@@ -7,6 +7,8 @@ import pandas as pd
 import os
 import re
 from collections import OrderedDict
+from datetime import datetime
+import time
 
 app = Flask(__name__)
 CORS(app)
@@ -15,6 +17,10 @@ model = joblib.load("model.pkl")
 scaler = joblib.load("scaler.pkl")
 
 selected_features = ["Age", "Support Calls", "Payment Delay", "Total Spend", "Contract Length"]
+
+# =========================
+# FUNTION UNTUK VALIDATION
+# =========================
 
 # Function untuk menangani potensi nama kolom tidak match 100% dan menangani nama kolom ambigu (Percabangan 3 & 4)
 REQUIRED_COLUMNS = {
@@ -100,6 +106,10 @@ def check_categorical_values(df):
 
     return invalid
 
+# ============================
+# FUNTION UNTUK PREPROCESSING
+# ============================
+
 # Function untuk membersihkan nilai null (Preprocessing 1)
 MISSING_THRESHOLD = 0.05
 
@@ -129,6 +139,115 @@ def encode_contract_length(df):
         df["Contract Length"] = df["Contract Length"].map(CONTRACT_MAPPING)
     return df
 
+def cleanup_tmp(folder="tmp", max_age_minutes=10):
+    now = time.time()
+    for filename in os.listdir(folder):
+        filepath = os.path.join(folder, filename)
+        if os.path.isfile(filepath):
+            age_minutes = (now - os.path.getmtime(filepath)) / 60
+            if age_minutes > max_age_minutes:
+                os.remove(filepath)
+
+# ================================================
+# FUNTION UNTUK CREATE OBJEK DATA (RESPONSE JSON)
+# ================================================
+
+# Function untuk create objek previews
+def generate_preview_rows(df_final):
+    cols = df_final.columns.tolist()
+    return [
+        OrderedDict((col, row[col]) for col in cols)
+        for _, row in df_final.head().iterrows()
+    ]
+
+# Function untuk create array summary
+def generate_summary(df_final):
+    counts = df_final["Churn Prediction"].value_counts()
+    percentages = df_final["Churn Prediction"].value_counts(normalize=True) * 100
+    summary = {}
+    for label in [0.0, 1.0]:
+        summary[str(label)] = {
+            "count": int(counts.get(label, 0)),
+            "percent": round(percentages.get(label, 0), 2)
+        }
+    return summary
+
+# Function untuk create array insight
+def generate_churn_insights(df_final):
+    df_churn = df_final[df_final["Churn Prediction"] == 1]
+
+    insights = []
+
+    # 1. Age
+    mean_age = df_churn["Age"].mean()
+    insights.append({
+        "feature": "Age",
+        "insight": f"Customers predicted to churn have an average age of {mean_age:.1f} years."
+    })
+
+    # 2. Support Calls
+    mean_calls = df_churn["Support Calls"].mean()
+    prop_over_3 = (df_churn["Support Calls"] >= 3).mean() * 100
+    insights.append({
+        "feature": "Support Calls",
+        "insight": f"Churning customers contacted customer support an average of {mean_calls:.1f} times, with {prop_over_3:.0f}% contacting more than 3 times."
+    })
+
+    # 3. Payment Delay
+    mean_delay = df_churn["Payment Delay"].mean()
+    prop_delay_over_5 = (df_churn["Payment Delay"] > 5).mean() * 100
+    insights.append({
+        "feature": "Payment Delay",
+        "insight": f"The average payment delay is {mean_delay:.1f} days, and {prop_delay_over_5:.0f}% had delays longer than 5 days."
+    })
+
+    # 4. Total Spend
+    avg_spend = df_churn["Total Spend"].mean()
+    low_spender_ratio = (df_churn["Total Spend"] > 300).mean() * 100
+    insights.append({
+        "feature": "Total Spend",
+        "insight": f"Churning customers spent an average of {avg_spend:,.0f}, with {low_spender_ratio:.0f}% spending more than 300."
+    })
+
+    # 5. Contract Length
+    contract_counts = df_churn["Contract Length"].value_counts(normalize=True)
+    if 1 in contract_counts:
+        short_contract_pct = contract_counts[1] * 100
+        insight_text = f"{short_contract_pct:.0f}% of churning customers had a 1-month contract."
+    else:
+        insight_text = "No churning customers had a 1-month contract."
+    
+    insights.append({
+        "feature": "Contract Length",
+        "insight": insight_text
+    })
+
+    return insights
+
+# =========================
+# FUNTION UNTUK ABOUT PAGE
+# =========================
+
+def generate_model_info(model):
+    return {
+        "model_name": model.__class__.__name__,
+        "n_estimators": getattr(model, "n_estimators", None),
+        "max_depth": getattr(model, "max_depth", None),
+        "random_state": getattr(model, "random_state", None),
+        "trained_on": "2025-07-22",
+        "train_size": 352666,
+        "test_accuracy": 0.9870,
+        "cross_val_score": 0.9871,
+    }
+
+def get_feature_importance(model, selected_features):
+    importances = model.feature_importances_
+    importance_data = [
+        {"feature": feature, "importance": round(imp, 4)}
+        for feature, imp in zip(selected_features, importances)
+    ]
+    importance_data.sort(key=lambda x: x["importance"], reverse=True)
+    return importance_data
 
 @app.route('/')
 def home():
@@ -136,6 +255,7 @@ def home():
 
 @app.route('/predict', methods=['POST'])
 def predict():
+    cleanup_tmp("tmp", max_age_minutes=10)
     # Percabangan 1: Cek kondisi apakah file ada di request
     if 'file' not in request.files:
         return jsonify({
@@ -220,69 +340,43 @@ def predict():
 
     # Inference
     try:
-        # Prediction
+        # Prediction & Probabilitas
         predictions = model.predict(X_scaled)
+        probas = model.predict_proba(X_scaled)[:, 1]
 
-        # Buat DF baru dari hasil prediction
         df_pred = pd.DataFrame({
-            "Prediction": predictions
+            "Churn Prediction": predictions,
+            "Churn Probability": probas
         }, index=X.index)
-        
-        print("==== DF Asli ====")
-        print(df.head(5))
-
-        print("==== DF Prediction ====")
-        print(df_pred.head(5))
-
-        # Join DF baru dg DF ori
         df_final = df.join(df_pred)
 
-        print("==== DF Final (Gabungan) ====")
-        print(df_final.head(5))
+        # Generate objek data
+        preview_rows = generate_preview_rows(df_final)
+        summary = generate_summary(df_final)
+        insights = generate_churn_insights(df_final)
 
-        # Preview Rows dan Prediction Counts untuk fitur
-        cols = df_final.columns.tolist()
-
-        preview_rows = [
-            OrderedDict((col, row[col]) for col in cols)
-            for _, row in df_final.head().iterrows()
-        ]
-
-        counts = df_final["Prediction"].value_counts()
-        percentages = df_final["Prediction"].value_counts(normalize=True) * 100
-        summary = {
-            str(k): {
-                "count": int(counts[k]),
-                "percent": round(percentages[k], 2)
-            } for k in counts.index
-        }
-
-        # DF Final disimpan sebagai file CSV sementara untuk endpoint download
+        # Generate file .csv
         os.makedirs("tmp", exist_ok=True)
-        output_filename = f"{filename_base}_prediction_result.csv"
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_filename = f"{filename_base}_{timestamp}_prediction_result.csv"
+
         csv_path = os.path.join("tmp", output_filename)
         df_final.to_csv(csv_path, index=False)
-
-        print("==== Preview Rows ====")
-        for row in preview_rows:
-            print(row)
-
-        print(json.dumps(preview_rows, indent=2))
         
         return Response(
             json.dumps({
                 'status': 'success',
                 'data': {
-                    'filename': original_filename,
+                    'original_filename': original_filename,
                     'preview': preview_rows,
                     'summary': summary,
-                    'total': len(df_final),
-                    'download_url': f"/download?file={output_filename}",
+                    'insights': insights,
+                    'output_filename': output_filename,
                 }
             }),
             mimetype='application/json'
-)
-
+    )
     except Exception as e:
         print("Error saat prediksi:", str(e))
         return jsonify({
@@ -298,7 +392,8 @@ def download_csv():
     if not filename:
         return jsonify({
             "status": "error",
-            "error": "Missing 'file' parameter in request"
+            "error": "Missing parameter in request",
+            'code': "MISSING_PARAMS",
         }), 400
 
     file_path = os.path.join("tmp", filename)
@@ -306,7 +401,8 @@ def download_csv():
     if not os.path.exists(file_path):
         return jsonify({
             "status": "error",
-            "error": "Prediction file not found"
+            "error": "File not found",
+            'code': "FILE_NOT_FOUND",
         }), 404
 
     return send_file(
@@ -315,6 +411,33 @@ def download_csv():
         as_attachment=True,
         download_name=filename
     )
+
+@app.route("/about", methods=["GET"])
+def about_model():
+    try:
+        model_info = generate_model_info(model)
+        feature_importance = get_feature_importance(model, selected_features)
+
+        return Response(
+            json.dumps({
+                "status": "success",
+                "data": {
+                    "model_info": model_info,
+                    "feature_importance": feature_importance
+                }
+            }),
+            mimetype='application/json'
+        )
+    except Exception as e:
+        return Response(
+            json.dumps({
+                "status": "error",
+                'error': "Failed to get model's information.",
+                'code': "INFO_NOT_FOUND",
+            }),
+            mimetype='application/json',
+            status=500
+        )
 
 
 if __name__ == '__main__':
