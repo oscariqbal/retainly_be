@@ -13,12 +13,15 @@ import requests
 import gdown
 
 MODEL_PATH = "model.pkl"
-MODEL_ID = "1rk4F4FImzhMIWCx0A-f8KoUNgOFR-2nP"
+MODEL_ID = "1Js79e9q-RalCmOEqmJKwwusF0bwg-wHK"
 
 
 SCALER_PATH = "scaler.pkl"
 
 def download_model():
+    if os.path.exists(MODEL_PATH):
+        os.remove(MODEL_PATH)
+
     if not os.path.exists(MODEL_PATH):
         print("Downloading model from Google Drive...")
         url = f"https://drive.google.com/uc?id={MODEL_ID}"
