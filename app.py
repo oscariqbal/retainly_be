@@ -13,6 +13,8 @@ import requests
 import gdown
 
 MODEL_PATH = "model.pkl"
+MODEL_ID = "16zgVN2Dw-gkVjpwwL7CZwTDnlBTzriBZ"
+
 SCALER_PATH = "scaler.pkl"
 
 def download_model():
