@@ -12,6 +12,9 @@ import time
 import requests
 import gdown
 
+import sys
+print("Running Python version:", sys.version)
+
 MODEL_PATH = "model.pkl"
 MODEL_ID = "16zgVN2Dw-gkVjpwwL7CZwTDnlBTzriBZ"
 
