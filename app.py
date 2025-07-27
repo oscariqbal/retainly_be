@@ -9,12 +9,31 @@ import re
 from collections import OrderedDict
 from datetime import datetime
 import time
+import requests
+
+MODEL_PATH = "model.pkl"
+SCALER_PATH = "scaler.pkl"
+
+def download_model():
+    if not os.path.exists(MODEL_PATH):
+        print("🔄 Downloading model from Google Drive...")
+        url = "https://drive.google.com/uc?export=download&id=16zgVN2Dw-gkVjpwwL7CZwTDnlBTzriBZ"
+        try:
+            response = requests.get(url, timeout=60)
+            response.raise_for_status()
+            with open(MODEL_PATH, "wb") as f:
+                f.write(response.content)
+            print("Model downloaded successfully.")
+        except Exception as e:
+            raise RuntimeError(f"Failed to download model: {e}")
+
+download_model()
 
 app = Flask(__name__)
 CORS(app)
 
-model = joblib.load("model.pkl")
-scaler = joblib.load("scaler.pkl")
+model = joblib.load(MODEL_PATH)
+scaler = joblib.load(SCALER_PATH)
 
 selected_features = ["Age", "Support Calls", "Payment Delay", "Total Spend", "Contract Length"]
 
