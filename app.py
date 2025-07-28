@@ -12,9 +12,8 @@ import time
 import requests
 import gdown
 
+MODEL_ID = "1MGQEo0B54S4E8xW7zA15tlR9PFokMP9W"
 MODEL_PATH = "model.pkl"
-MODEL_ID = "1Js79e9q-RalCmOEqmJKwwusF0bwg-wHK"
-
 
 SCALER_PATH = "scaler.pkl"
 
@@ -24,8 +23,7 @@ def download_model():
 
     if not os.path.exists(MODEL_PATH):
         print("Downloading model from Google Drive...")
-        url = f"https://drive.google.com/uc?id={MODEL_ID}"
-        gdown.download(url, MODEL_PATH, quiet=False)
+        gdown.download(id=MODEL_ID, output=MODEL_PATH, quiet=False)
         try:
             response = requests.get(url, timeout=60)
             response.raise_for_status()
