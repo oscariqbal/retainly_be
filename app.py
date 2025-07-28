@@ -156,6 +156,8 @@ def encode_contract_length(df):
         df["Contract Length"] = df["Contract Length"].map(CONTRACT_MAPPING)
     return df
 
+os.makedirs("tmp", exist_ok=True)
+
 def cleanup_tmp(folder="tmp", max_age_minutes=10):
     now = time.time()
     for filename in os.listdir(folder):
