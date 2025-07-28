@@ -35,6 +35,8 @@ scaler = joblib.load(SCALER_PATH)
 
 selected_features = ["Age", "Support Calls", "Payment Delay", "Total Spend", "Contract Length"]
 
+os.makedirs("tmp", exist_ok=True)
+
 # =========================
 # FUNTION UNTUK VALIDATION
 # =========================
@@ -155,8 +157,6 @@ def encode_contract_length(df):
     if "Contract Length" in df.columns:
         df["Contract Length"] = df["Contract Length"].map(CONTRACT_MAPPING)
     return df
-
-os.makedirs("tmp", exist_ok=True)
 
 def cleanup_tmp(folder="tmp", max_age_minutes=10):
     now = time.time()
