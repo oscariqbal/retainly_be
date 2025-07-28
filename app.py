@@ -24,14 +24,6 @@ def download_model():
     if not os.path.exists(MODEL_PATH):
         print("Downloading model from Google Drive...")
         gdown.download(id=MODEL_ID, output=MODEL_PATH, quiet=False)
-        try:
-            response = requests.get(url, timeout=60)
-            response.raise_for_status()
-            with open(MODEL_PATH, "wb") as f:
-                f.write(response.content)
-            print("Model downloaded successfully.")
-        except Exception as e:
-            raise RuntimeError(f"Failed to download model: {e}")
 
 download_model()
 
